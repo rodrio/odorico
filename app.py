@@ -3,7 +3,7 @@ import os
 import json
 import uuid
 from datetime import datetime, timedelta
-import google.generativeai as genai
+import google.genai as genai
 from werkzeug.utils import secure_filename
 from openai import OpenAI
 import anthropic
@@ -83,9 +83,10 @@ def test_api_key(provider, api_key):
     """Test if an API key is valid"""
     try:
         if provider == 'gemini':
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-2.0-flash')
-            response = model.generate_content('Hello')
+            client = genai.Client(api_key=api_key)
+            # Test with chat-based approach
+            chat = client.chats.create(model='gemini-2.0-flash')
+            response = chat.send_message('Hello')
             return True, 'API key is valid'
         elif provider == 'openai':
             client = OpenAI(api_key=api_key)
@@ -96,13 +97,26 @@ def test_api_key(provider, api_key):
             )
             return True, 'API key is valid'
         elif provider == 'anthropic':
-            client = anthropic.Anthropic(api_key=api_key)
-            response = client.messages.create(
-                model='claude-3-haiku-20240307',
-                max_tokens=1,
-                messages=[{'role': 'user', 'content': 'Hello'}]
+            # Configure Anthropic
+            anthropic_client = anthropic.Anthropic(api_key=api_key)
+            
+            # Build messages
+            messages = []
+            if agent['prompt']:
+                messages.append({'role': 'user', 'content': agent['prompt']})
+                messages.append({'role': 'assistant', 'content': 'I understand. I will act according to these instructions.'})
+            messages.append({'role': 'user', 'content': user_message})
+            
+            response = anthropic_client.messages.create(
+                model=agent['model'],
+                max_tokens=2000,
+                messages=messages
             )
-            return True, 'API key is valid'
+            
+            return jsonify({
+                'response': response.content[0].text,
+                'timestamp': datetime.now().isoformat()
+            })
         else:
             return False, 'Unknown provider'
     except Exception as e:
@@ -265,27 +279,23 @@ def send_message(agent_id):
     try:
         if provider == 'gemini':
             # Configure Gemini
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel(agent['model'])
+            gemini_client = genai.Client(api_key=api_key)
+            chat = gemini_client.chats.create(model=agent['model'])
             
-            # Start chat with agent prompt
-            chat = model.start_chat(history=[])
-            
-            # Send agent prompt first
+            # Send the agent prompt first if it exists
             if agent['prompt']:
                 chat.send_message(agent['prompt'])
             
-            # Send user message and get response
+            # Send the user message and get response
             response = chat.send_message(user_message)
             
             return jsonify({
                 'response': response.text,
                 'timestamp': datetime.now().isoformat()
             })
-            
         elif provider == 'openai':
             # Configure OpenAI
-            client = OpenAI(api_key=api_key)
+            openai_client = OpenAI(api_key=api_key)
             
             # Build messages
             messages = []
@@ -293,7 +303,7 @@ def send_message(agent_id):
                 messages.append({'role': 'system', 'content': agent['prompt']})
             messages.append({'role': 'user', 'content': user_message})
             
-            response = client.chat.completions.create(
+            response = openai_client.chat.completions.create(
                 model=agent['model'],
                 messages=messages,
                 max_tokens=2000
@@ -306,7 +316,7 @@ def send_message(agent_id):
             
         elif provider == 'anthropic':
             # Configure Anthropic
-            client = anthropic.Anthropic(api_key=api_key)
+            anthropic_client = anthropic.Anthropic(api_key=api_key)
             
             # Build messages
             messages = []
@@ -315,7 +325,7 @@ def send_message(agent_id):
                 messages.append({'role': 'assistant', 'content': 'I understand. I will act according to these instructions.'})
             messages.append({'role': 'user', 'content': user_message})
             
-            response = client.messages.create(
+            response = anthropic_client.messages.create(
                 model=agent['model'],
                 max_tokens=2000,
                 messages=messages
