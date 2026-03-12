@@ -188,6 +188,7 @@
     <div class="chat-header">
         <div class="agent-details">
             <h3>{{ agent.name }}</h3>
+            <p>Provider: {{ agent.get('provider', 'gemini').title() }}</p>
             <p>Model: {{ agent.model }}</p>
         </div>
         <div class="chat-actions">

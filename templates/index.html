@@ -20,6 +20,7 @@
             <li class="agent-item">
                 <div class="agent-info">
                     <h4>{{ agent.name }}</h4>
+                    <p>Provider: {{ agent.get('provider', 'gemini').title() }}</p>
                     <p>Model: {{ agent.model }}</p>
                     {% if agent.prompt %}
                     <p>Prompt: {{ agent.prompt[:100] }}{% if agent.prompt|length > 100 %}...{% endif %}</p>

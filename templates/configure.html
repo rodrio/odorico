@@ -20,15 +20,30 @@
         </div>
         
         <div class="form-group">
-            <label for="model">Gemini Model *</label>
-            <select id="model" name="model" required>
-                <option value="">Select a model...</option>
-                {% for model_key, model_name in models.items() %}
-                <option value="{{ model_key }}" 
-                        {% if agent and agent.model == model_key %}selected{% endif %}>
-                    {{ model_name }}
+            <label for="provider">Provider *</label>
+            <select id="provider" name="provider" required onchange="updateModels()">
+                <option value="">Select a provider...</option>
+                {% for provider in models.keys() %}
+                <option value="{{ provider }}" 
+                        {% if agent and agent.provider == provider %}selected{% endif %}>
+                    {{ provider.title() }}
                 </option>
                 {% endfor %}
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="model">Model *</label>
+            <select id="model" name="model" required>
+                <option value="">Select a model...</option>
+                {% if agent and agent.provider %}
+                    {% for model_id, model_name in models[agent.provider].items() %}
+                    <option value="{{ model_id }}" 
+                            {% if agent.model == model_id %}selected{% endif %}>
+                        {{ model_name }}
+                    </option>
+                    {% endfor %}
+                {% endif %}
             </select>
         </div>
         
@@ -60,6 +75,7 @@
 {% if agent %}
 <div class="card">
     <h3>Agent Information</h3>
+    <p><strong>Provider:</strong> {{ agent.provider.title() }}</p>
     <p><strong>Created:</strong> {{ agent.created_at }}</p>
     <p><strong>Last Updated:</strong> {{ agent.updated_at }}</p>
     <p><strong>Model:</strong> {{ agent.model }}</p>
@@ -82,4 +98,34 @@
         <li>Specify the target audience and context</li>
     </ul>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const models = {{ models | tojson }};
+
+function updateModels() {
+    const providerSelect = document.getElementById('provider');
+    const modelSelect = document.getElementById('model');
+    const selectedProvider = providerSelect.value;
+    
+    // Clear current options
+    modelSelect.innerHTML = '<option value="">Select a model...</option>';
+    
+    if (selectedProvider && models[selectedProvider]) {
+        // Add models for selected provider
+        for (const [modelId, modelName] of Object.entries(models[selectedProvider])) {
+            const option = document.createElement('option');
+            option.value = modelId;
+            option.textContent = modelName;
+            modelSelect.appendChild(option);
+        }
+    }
+}
+
+// Initialize models on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateModels();
+});
+</script>
 {% endblock %}

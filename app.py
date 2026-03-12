@@ -5,6 +5,8 @@ import uuid
 from datetime import datetime
 import google.generativeai as genai
 from werkzeug.utils import secure_filename
+from openai import OpenAI
+import anthropic
 
 app = Flask(__name__)
 app.secret_key = 'odorico-secret-key-change-in-production'
@@ -26,24 +28,75 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 # Create upload directory if it doesn't exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Gemini models
-GEMINI_MODELS = {
-    'gemini-2.0-flash': 'Gemini 2.0 Flash',
-    'gemini-2.0-flash-lite': 'Gemini 2.0 Flash‑Lite',
-    'gemini-2.0-pro': 'Gemini 2.0 Pro',
-    'gemini-3.1-flash-lite-preview': 'Gemini 3.1 Flash‑Lite'
+# Models by provider
+MODELS = {
+    'gemini': {
+        'gemini-2.0-flash-lite': 'Gemini 2.0 Flash‑Lite',
+        'gemini-2.0-flash': 'Gemini 2.0 Flash',
+        'gemini-3.1-flash-lite-preview': 'Gemini 3.1 Flash‑Lite',
+        'gemini-2.0-pro': 'Gemini 2.0 Pro'
+    },
+    'openai': {
+        'gpt-5-nano': 'GPT‑5 nano',
+        'gpt-5-mini': 'GPT‑5 mini',
+        'o4-mini': 'o4‑mini',
+        'gpt-5.4': 'GPT‑5.4',
+        'o1': 'o1'
+    },
+    'anthropic': {
+        'claude-haiku-4.5': 'Claude Haiku 4.5',
+        'claude-sonnet-4.6': 'Claude Sonnet 4.6',
+        'claude-opus-4.5': 'Claude Opus 4.5'
+    }
 }
 
 # Agent storage file
 AGENTS_FILE = 'config/agents.json'
+# API keys storage file
+API_KEYS_FILE = 'config/api_keys.json'
 
-def load_api_key():
-    """Load Gemini API key from config file"""
+def load_api_keys():
+    """Load all API keys from JSON file"""
     try:
-        with open('config/api_key.txt', 'r') as f:
-            return f.read().strip()
+        with open(API_KEYS_FILE, 'r') as f:
+            return json.load(f)
     except FileNotFoundError:
-        return None
+        return {'gemini': '', 'openai': '', 'anthropic': ''}
+
+def save_api_keys(api_keys):
+    """Save API keys to JSON file"""
+    os.makedirs('config', exist_ok=True)
+    with open(API_KEYS_FILE, 'w') as f:
+        json.dump(api_keys, f, indent=2)
+
+def test_api_key(provider, api_key):
+    """Test if an API key is valid"""
+    try:
+        if provider == 'gemini':
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel('gemini-2.0-flash')
+            response = model.generate_content('Hello')
+            return True, 'API key is valid'
+        elif provider == 'openai':
+            client = OpenAI(api_key=api_key)
+            response = client.chat.completions.create(
+                model='gpt-3.5-turbo',
+                messages=[{'role': 'user', 'content': 'Hello'}],
+                max_tokens=1
+            )
+            return True, 'API key is valid'
+        elif provider == 'anthropic':
+            client = anthropic.Anthropic(api_key=api_key)
+            response = client.messages.create(
+                model='claude-3-haiku-20240307',
+                max_tokens=1,
+                messages=[{'role': 'user', 'content': 'Hello'}]
+            )
+            return True, 'API key is valid'
+        else:
+            return False, 'Unknown provider'
+    except Exception as e:
+        return False, f'Invalid API key: {str(e)}'
 
 def load_agents():
     """Load agents from JSON file"""
@@ -63,6 +116,37 @@ def allowed_file(filename):
     """Check if file has allowed extension"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+@app.route('/api_keys', methods=['GET', 'POST'])
+def manage_api_keys():
+    """Manage API keys for all providers"""
+    if request.method == 'POST':
+        api_keys = load_api_keys()
+        
+        # Update API keys from form
+        for provider in ['gemini', 'openai', 'anthropic']:
+            api_key = request.form.get(f'{provider}_key', '').strip()
+            api_keys[provider] = api_key
+        
+        save_api_keys(api_keys)
+        flash('API keys have been updated successfully!')
+        return redirect(url_for('manage_api_keys'))
+    
+    # GET request
+    api_keys = load_api_keys()
+    return render_template('api_keys.html', api_keys=api_keys, models=MODELS)
+
+@app.route('/test_api_key/<provider>', methods=['POST'])
+def test_api_key_route(provider):
+    """Test API key for a specific provider"""
+    api_keys = load_api_keys()
+    api_key = api_keys.get(provider, '')
+    
+    if not api_key:
+        return jsonify({'success': False, 'message': 'No API key configured'})
+    
+    is_valid, message = test_api_key(provider, api_key)
+    return jsonify({'success': is_valid, 'message': message})
+
 @app.route('/')
 def index():
     """Main page with agent selection"""
@@ -75,6 +159,7 @@ def configure_agent():
     if request.method == 'POST':
         agent_id = request.form.get('agent_id') or str(uuid.uuid4())
         name = request.form.get('name', '').strip()
+        provider = request.form.get('provider')
         model = request.form.get('model')
         prompt_text = request.form.get('prompt_text', '').strip()
         
@@ -101,6 +186,7 @@ def configure_agent():
         agents = load_agents()
         agents[agent_id] = {
             'name': name,
+            'provider': provider,
             'model': model,
             'prompt': combined_prompt,
             'created_at': datetime.now().isoformat(),
@@ -118,7 +204,7 @@ def configure_agent():
         agents = load_agents()
         agent = agents.get(agent_id)
     
-    return render_template('configure.html', agent=agent, models=GEMINI_MODELS, agent_id=agent_id)
+    return render_template('configure.html', agent=agent, models=MODELS, agent_id=agent_id)
 
 @app.route('/delete_agent/<agent_id>')
 def delete_agent(agent_id):
@@ -154,31 +240,81 @@ def send_message(agent_id):
     if not user_message:
         return jsonify({'error': 'Message cannot be empty'}), 400
     
-    # Get API key
-    api_key = load_api_key()
+    # Get API key for the provider
+    api_keys = load_api_keys()
+    provider = agent.get('provider', 'gemini')
+    api_key = api_keys.get(provider, '')
+    
     if not api_key:
-        return jsonify({'error': 'Gemini API key not configured'}), 500
+        return jsonify({'error': f'{provider.title()} API key not configured'}), 500
     
     try:
-        # Configure Gemini
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(agent['model'])
+        if provider == 'gemini':
+            # Configure Gemini
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel(agent['model'])
+            
+            # Start chat with agent prompt
+            chat = model.start_chat(history=[])
+            
+            # Send agent prompt first
+            if agent['prompt']:
+                chat.send_message(agent['prompt'])
+            
+            # Send user message and get response
+            response = chat.send_message(user_message)
+            
+            return jsonify({
+                'response': response.text,
+                'timestamp': datetime.now().isoformat()
+            })
+            
+        elif provider == 'openai':
+            # Configure OpenAI
+            client = OpenAI(api_key=api_key)
+            
+            # Build messages
+            messages = []
+            if agent['prompt']:
+                messages.append({'role': 'system', 'content': agent['prompt']})
+            messages.append({'role': 'user', 'content': user_message})
+            
+            response = client.chat.completions.create(
+                model=agent['model'],
+                messages=messages,
+                max_tokens=2000
+            )
+            
+            return jsonify({
+                'response': response.choices[0].message.content,
+                'timestamp': datetime.now().isoformat()
+            })
+            
+        elif provider == 'anthropic':
+            # Configure Anthropic
+            client = anthropic.Anthropic(api_key=api_key)
+            
+            # Build messages
+            messages = []
+            if agent['prompt']:
+                messages.append({'role': 'user', 'content': agent['prompt']})
+                messages.append({'role': 'assistant', 'content': 'I understand. I will act according to these instructions.'})
+            messages.append({'role': 'user', 'content': user_message})
+            
+            response = client.messages.create(
+                model=agent['model'],
+                max_tokens=2000,
+                messages=messages
+            )
+            
+            return jsonify({
+                'response': response.content[0].text,
+                'timestamp': datetime.now().isoformat()
+            })
         
-        # Start chat with agent prompt
-        chat = model.start_chat(history=[])
-        
-        # Send agent prompt first
-        if agent['prompt']:
-            chat.send_message(agent['prompt'])
-        
-        # Send user message and get response
-        response = chat.send_message(user_message)
-        
-        return jsonify({
-            'response': response.text,
-            'timestamp': datetime.now().isoformat()
-        })
-        
+        else:
+            return jsonify({'error': f'Unknown provider: {provider}'}), 500
+            
     except Exception as e:
         return jsonify({'error': f'Failed to get response: {str(e)}'}), 500
 
@@ -195,6 +331,7 @@ def export_conversation(agent_id):
     # In a real implementation, you'd store conversation history
     export_data = {
         'agent_name': agent['name'],
+        'provider': agent.get('provider', 'gemini'),
         'model': agent['model'],
         'prompt': agent['prompt'],
         'exported_at': datetime.now().isoformat(),
