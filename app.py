@@ -1,8 +1,8 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, session
 import os
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 import google.generativeai as genai
 from werkzeug.utils import secure_filename
 from openai import OpenAI
@@ -18,6 +18,12 @@ app.jinja_env.comment_start_string = '{#'
 app.jinja_env.comment_end_string = '#}'
 app.jinja_env.line_statement_prefix = '#'
 app.jinja_env.line_comment_prefix = '##'
+
+# Session security configuration
+app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
 
 # Configuration
 UPLOAD_FOLDER = 'uploads'
@@ -55,19 +61,23 @@ AGENTS_FILE = 'config/agents.json'
 # API keys storage file
 API_KEYS_FILE = 'config/api_keys.json'
 
-def load_api_keys():
-    """Load all API keys from JSON file"""
-    try:
-        with open(API_KEYS_FILE, 'r') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {'gemini': '', 'openai': '', 'anthropic': ''}
+# Session-based API key management
+def get_api_keys():
+    """Get API keys from session"""
+    return {
+        'gemini': session.get('gemini_key', ''),
+        'openai': session.get('openai_key', ''),
+        'anthropic': session.get('anthropic_key', '')
+    }
 
-def save_api_keys(api_keys):
-    """Save API keys to JSON file"""
-    os.makedirs('config', exist_ok=True)
-    with open(API_KEYS_FILE, 'w') as f:
-        json.dump(api_keys, f, indent=2)
+def set_api_key(provider, api_key):
+    """Set API key in session"""
+    session[f'{provider}_key'] = api_key
+
+def clear_api_keys():
+    """Clear all API keys from session"""
+    for provider in ['gemini', 'openai', 'anthropic']:
+        session.pop(f'{provider}_key', None)
 
 def test_api_key(provider, api_key):
     """Test if an API key is valid"""
@@ -120,25 +130,22 @@ def allowed_file(filename):
 def manage_api_keys():
     """Manage API keys for all providers"""
     if request.method == 'POST':
-        api_keys = load_api_keys()
-        
         # Update API keys from form
         for provider in ['gemini', 'openai', 'anthropic']:
             api_key = request.form.get(f'{provider}_key', '').strip()
-            api_keys[provider] = api_key
+            set_api_key(provider, api_key)
         
-        save_api_keys(api_keys)
-        flash('API keys have been updated successfully!')
+        flash('API keys have been updated for this session!')
         return redirect(url_for('manage_api_keys'))
     
     # GET request
-    api_keys = load_api_keys()
+    api_keys = get_api_keys()
     return render_template('api_keys.html', api_keys=api_keys, models=MODELS)
 
 @app.route('/test_api_key/<provider>', methods=['POST'])
 def test_api_key_route(provider):
     """Test API key for a specific provider"""
-    api_keys = load_api_keys()
+    api_keys = get_api_keys()
     api_key = api_keys.get(provider, '')
     
     if not api_key:
@@ -146,6 +153,13 @@ def test_api_key_route(provider):
     
     is_valid, message = test_api_key(provider, api_key)
     return jsonify({'success': is_valid, 'message': message})
+
+@app.route('/clear_api_keys', methods=['POST'])
+def clear_api_keys_route():
+    """Clear all API keys from session"""
+    clear_api_keys()
+    flash('All API keys have been cleared from this session.')
+    return redirect(url_for('manage_api_keys'))
 
 @app.route('/')
 def index():
@@ -241,7 +255,7 @@ def send_message(agent_id):
         return jsonify({'error': 'Message cannot be empty'}), 400
     
     # Get API key for the provider
-    api_keys = load_api_keys()
+    api_keys = get_api_keys()
     provider = agent.get('provider', 'gemini')
     api_key = api_keys.get(provider, '')
     

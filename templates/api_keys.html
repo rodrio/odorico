@@ -169,7 +169,7 @@
 {% block content %}
 <div class="card">
     <h2>API Key Management</h2>
-    <p>Configure and test API keys for different AI providers. Each provider requires a valid API key to use their models.</p>
+    <p>Configure and test API keys for different AI providers. Keys are stored only in your current session and will be cleared when you close the browser.</p>
 </div>
 
 <form method="post">
@@ -200,7 +200,7 @@
                    placeholder="Enter Gemini API key..." 
                    value="{{ api_keys.gemini }}">
             <button type="button" class="btn btn-secondary" onclick="togglePassword('gemini_key')">
-                👁️
+                Show
             </button>
         </div>
         
@@ -241,7 +241,7 @@
                    placeholder="Enter OpenAI API key..." 
                    value="{{ api_keys.openai }}">
             <button type="button" class="btn btn-secondary" onclick="togglePassword('openai_key')">
-                👁️
+                Show
             </button>
         </div>
         
@@ -282,7 +282,7 @@
                    placeholder="Enter Anthropic API key..." 
                    value="{{ api_keys.anthropic }}">
             <button type="button" class="btn btn-secondary" onclick="togglePassword('anthropic_key')">
-                👁️
+                Show
             </button>
         </div>
         
@@ -299,9 +299,14 @@
     <div class="card">
         <div class="form-group">
             <button type="submit" class="btn">Save All API Keys</button>
+            <button type="button" class="btn btn-danger" onclick="clearAllKeys()">Clear All Keys</button>
             <a href="{{ url_for('index') }}" class="btn btn-secondary">Back to Agents</a>
         </div>
     </div>
+</form>
+
+<form method="post" action="{{ url_for('clear_api_keys_route') }}" id="clearForm" style="display: none;">
+    <input type="hidden" name="confirm" value="true">
 </form>
 
 <div class="card">
@@ -365,6 +370,12 @@ function testApiKey(provider) {
         button.disabled = false;
         button.textContent = 'Test Key';
     });
+}
+
+function clearAllKeys() {
+    if (confirm('Are you sure you want to clear all API keys from this session? This action cannot be undone.')) {
+        document.getElementById('clearForm').submit();
+    }
 }
 
 // Auto-save functionality (optional)
