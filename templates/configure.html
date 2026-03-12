@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}{% if agent %}Edit Agent{% else %}Create New Agent{% endif %}{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>{% if agent %}Edit Agent: {{ agent.name }}{% else %}Create New Agent{% endif %}</h2>
+    
+    <form method="post" enctype="multipart/form-data">
+        {% if agent_id %}
+        <input type="hidden" name="agent_id" value="{{ agent_id }}">
+        {% endif %}
+        
+        <div class="form-group">
+            <label for="name">Agent Name *</label>
+            <input type="text" id="name" name="name" required 
+                   value="{% if agent %}{{ agent.name }}{% endif %}"
+                   placeholder="e.g., doctor, teacher, programmer">
+            <small>The name should describe the agent's role or expertise.</small>
+        </div>
+        
+        <div class="form-group">
+            <label for="model">Gemini Model *</label>
+            <select id="model" name="model" required>
+                <option value="">Select a model...</option>
+                {% for model_key, model_name in models.items() %}
+                <option value="{{ model_key }}" 
+                        {% if agent and agent.model == model_key %}selected{% endif %}>
+                    {{ model_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="prompt_file">Upload Prompt File (Optional)</label>
+            <input type="file" id="prompt_file" name="prompt_file" accept=".txt">
+            <small>Upload a .txt file containing the agent's role and instructions.</small>
+        </div>
+        
+        <div class="form-group">
+            <label for="prompt_text">Prompt Text (Optional)</label>
+            <textarea id="prompt_text" name="prompt_text" rows="10" 
+                      placeholder="Enter the agent's role, personality, and instructions here...">{% if agent %}{{ agent.prompt }}{% endif %}</textarea>
+            <small>
+                If you provide both a file and text, the content will be merged with the file content first, 
+                followed by the text content below.
+            </small>
+        </div>
+        
+        <div class="form-group">
+            <button type="submit" class="btn">
+                {% if agent %}Update Agent{% else %}Create Agent{% endif %}
+            </button>
+            <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+
+{% if agent %}
+<div class="card">
+    <h3>Agent Information</h3>
+    <p><strong>Created:</strong> {{ agent.created_at }}</p>
+    <p><strong>Last Updated:</strong> {{ agent.updated_at }}</p>
+    <p><strong>Model:</strong> {{ agent.model }}</p>
+    {% if agent.prompt %}
+    <details>
+        <summary>Current Prompt</summary>
+        <pre style="background: #f8f9fa; padding: 10px; border-radius: 5px; margin-top: 10px;">{{ agent.prompt }}</pre>
+    </details>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="card">
+    <h3>Prompt Writing Tips</h3>
+    <ul>
+        <li>Be specific about the agent's role and expertise</li>
+        <li>Include personality traits and communication style</li>
+        <li>Set clear boundaries and limitations</li>
+        <li>Provide examples of desired responses</li>
+        <li>Specify the target audience and context</li>
+    </ul>
+</div>
+{% endblock %}

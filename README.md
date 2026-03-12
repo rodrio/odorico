@@ -1,0 +1,116 @@
+# Odorico - Configurable AI Agent Chat
+
+Odorico is a web application that allows you to create and chat with configurable AI agents using Google's Gemini models.
+
+## Features
+
+- **Multiple Gemini Models**: Support for Gemini 2.0 Flash, Gemini 2.0 Flash‑Lite, and Gemini 2.0 Pro
+- **Agent Configuration**: Create custom agents with specific roles and personalities
+- **Flexible Prompt Input**: Configure agents via text input or file upload
+- **Agent Management**: Store, edit, and delete agents
+- **Chat Interface**: Clean, responsive chat interface with multiline input
+- **Conversation Export**: Export chat history as JSON
+- **Modern UI**: Clean, responsive design using vanilla CSS
+
+## Installation
+
+1. Clone or download the project
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Configure your Gemini API key:
+   - Open `config/api_key.txt`
+   - Replace `YOUR_GEMINI_API_KEY_HERE` with your actual API key
+4. Run the application:
+   ```bash
+   python app.py
+   ```
+5. Open your browser and navigate to `http://localhost:5000`
+
+## Usage
+
+### Creating an Agent
+
+1. Click "New Agent" on the main page
+2. Enter a name for your agent (e.g., "doctor", "teacher", "programmer")
+3. Select a Gemini model
+4. Configure the agent's prompt:
+   - Enter text directly in the prompt field
+   - Upload a .txt file with the prompt
+   - Use both - file content will be merged with text content
+5. Click "Create Agent"
+
+### Chatting with an Agent
+
+1. Select an agent from the list on the main page
+2. Type your message in the chat interface
+3. Use Enter to send, Shift+Enter for new lines
+4. Export the conversation using the "Export" button
+
+### Managing Agents
+
+- **Edit**: Click the "Edit" button next to an agent
+- **Delete**: Click the "Delete" button (requires confirmation)
+- **Chat**: Click the "Chat" button to start a conversation
+
+## Project Structure
+
+```
+odorico/
+├── app.py                 # Main Flask application
+├── requirements.txt       # Python dependencies
+├── config/
+│   ├── api_key.txt       # Gemini API key configuration
+│   └── agents.json       # Stored agents (auto-generated)
+├── templates/
+│   ├── base.html         # Base template
+│   ├── index.html        # Main page with agent list
+│   ├── configure.html    # Agent configuration page
+│   └── chat.html         # Chat interface
+├── static/
+│   ├── css/              # CSS files (if needed)
+│   └── js/               # JavaScript files (if needed)
+├── uploads/              # Temporary file uploads
+└── logs/                 # Application logs
+```
+
+## Configuration
+
+### Gemini API Key
+
+Get your API key from the Google AI Studio:
+1. Visit https://makersuite.google.com/app/apikey
+2. Create a new API key
+3. Add it to `config/api_key.txt`
+
+### Prompt Writing Tips
+
+- Be specific about the agent's role and expertise
+- Include personality traits and communication style
+- Set clear boundaries and limitations
+- Provide examples of desired responses
+- Specify the target audience and context
+
+## Supported Models
+
+- **Gemini 2.0 Flash**: Fast and efficient for most tasks
+- **Gemini 2.0 Flash‑Lite**: Lightweight version for simpler interactions
+- **Gemini 2.0 Pro**: Most capable model for complex tasks
+
+## Security Notes
+
+- Keep your API key secure and never commit it to version control
+- The application runs in debug mode by default - disable for production
+- Consider adding authentication for multi-user deployments
+
+## Technologies Used
+
+- **Flask**: Web framework
+- **Google Generative AI**: Gemini API client
+- **HTML5/CSS3**: Frontend with Django template syntax
+- **Vanilla JavaScript**: Minimal client-side interactivity
+
+## License
+
+This project is provided as-is for educational and development purposes.
