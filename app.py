@@ -9,7 +9,9 @@ from openai import OpenAI
 import anthropic
 
 app = Flask(__name__)
-app.secret_key = 'odorico-secret-key-change-in-production'
+
+# Configure secret key from environment variable for production
+app.secret_key = os.environ.get('SECRET_KEY', 'odorico-secret-key-change-in-production')
 
 # Configure Flask to use Django-like template syntax
 app.jinja_env.variable_start_string = '{{'
@@ -20,7 +22,7 @@ app.jinja_env.line_statement_prefix = '#'
 app.jinja_env.line_comment_prefix = '##'
 
 # Session security configuration
-app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('SESSION_COOKIE_SECURE', 'False').lower() == 'true'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
@@ -371,4 +373,8 @@ def export_conversation(agent_id):
     return send_file(filepath, as_attachment=True, download_name=filename)
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Only run in debug mode when not in production
+    if os.environ.get('FLASK_ENV') == 'production':
+        app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    else:
+        app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

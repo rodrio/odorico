@@ -1,0 +1,33 @@
+services:
+  # Web Service
+  - type: web
+    name: odorico
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --config gunicorn_config.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: FLASK_ENV
+        value: production
+      - key: FLASK_DEBUG
+        value: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+  # Postgres Database (optional - if needed in future)
+  # - type: pserv
+  #   name: odorico-db
+  #   env: docker
+  #   plan: free
+  #   repo: https://github.com/render-examples/postgres
+  #   envVars:
+  #     - key: POSTGRES_PASSWORD
+  #       generateValue: true
