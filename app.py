@@ -87,13 +87,13 @@ def test_api_key(provider, api_key):
         if provider == 'gemini':
             client = genai.Client(api_key=api_key)
             # Test with chat-based approach
-            chat = client.chats.create(model='gemini-2.0-flash')
+            chat = client.chats.create(model='gemini-3.1-flash-lite-preview')
             response = chat.send_message('Hello')
             return True, 'API key is valid'
         elif provider == 'openai':
             client = OpenAI(api_key=api_key)
             response = client.chat.completions.create(
-                model='gpt-3.5-turbo',
+                model='gpt-5-nano',
                 messages=[{'role': 'user', 'content': 'Hello'}],
                 max_tokens=1
             )
@@ -101,24 +101,13 @@ def test_api_key(provider, api_key):
         elif provider == 'anthropic':
             # Configure Anthropic
             anthropic_client = anthropic.Anthropic(api_key=api_key)
-            
-            # Build messages
-            messages = []
-            if agent['prompt']:
-                messages.append({'role': 'user', 'content': agent['prompt']})
-                messages.append({'role': 'assistant', 'content': 'I understand. I will act according to these instructions.'})
-            messages.append({'role': 'user', 'content': user_message})
-            
+            # Test with a simple message to validate the API key (fixed model)
             response = anthropic_client.messages.create(
-                model=agent['model'],
-                max_tokens=2000,
-                messages=messages
+                model='claude-haiku-4.5',
+                messages=[{'role': 'user', 'content': 'Hello'}],
+                max_tokens=1
             )
-            
-            return jsonify({
-                'response': response.content[0].text,
-                'timestamp': datetime.now().isoformat()
-            })
+            return True, 'API key is valid'
         else:
             return False, 'Unknown provider'
     except Exception as e:
