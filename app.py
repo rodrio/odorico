@@ -64,13 +64,18 @@ AGENTS_FILE = 'config/agents.json'
 # API keys storage file
 API_KEYS_FILE = 'config/api_keys.json'
 
-# Session-based API key management
+# Session-based API key management with environment variable support
 def get_api_keys():
-    """Get API keys from session"""
+    """Get API keys from session and environment variables"""
+    # Priority: Environment variables > Session variables
     return {
-        'gemini': session.get('gemini_key', ''),
-        'openai': session.get('openai_key', ''),
-        'anthropic': session.get('anthropic_key', '')
+        'gemini': os.environ.get('GOOGLE_API_KEY') or session.get('gemini_key', ''),
+        'openai': os.environ.get('OPENAI_API_KEY') or session.get('openai_key', ''),
+        'anthropic': os.environ.get('ANTHROPIC_API_KEY') or session.get('anthropic_key', ''),
+        # External tools for Oracle
+        'searchapi': os.environ.get('SEARCHAPI_API_KEY'),
+        'linkedin': os.environ.get('LINKEDIN_API_KEY'),
+        'meta': os.environ.get('META_API_KEY')
     }
 
 def set_api_key(provider, api_key):
@@ -136,7 +141,7 @@ def allowed_file(filename):
 def manage_api_keys():
     """Manage API keys for all providers"""
     if request.method == 'POST':
-        # Update API keys from form
+        # Update API keys from form (only update session, not environment)
         for provider in ['gemini', 'openai', 'anthropic']:
             api_key = request.form.get(f'{provider}_key', '').strip()
             set_api_key(provider, api_key)
@@ -146,7 +151,35 @@ def manage_api_keys():
     
     # GET request
     api_keys = get_api_keys()
-    return render_template('api_keys.html', api_keys=api_keys, models=MODELS)
+    
+    # Determine source of each key (environment vs session)
+    api_key_sources = {}
+    for provider, key in api_keys.items():
+        if provider in ['searchapi', 'linkedin', 'meta']:
+            # External tools only come from environment
+            api_key_sources[provider] = {
+                'key': key or '',
+                'source': 'environment' if key else 'not_configured',
+                'editable': False
+            }
+        else:
+            # Main providers can come from environment or session
+            env_key = os.environ.get(f'{provider.upper()}_API_KEY' if provider != 'gemini' else 'GOOGLE_API_KEY')
+            if env_key:
+                api_key_sources[provider] = {
+                    'key': env_key[:10] + '...' if len(env_key) > 10 else env_key,
+                    'source': 'environment',
+                    'editable': False
+                }
+            else:
+                session_key = session.get(f'{provider}_key', '')
+                api_key_sources[provider] = {
+                    'key': session_key,
+                    'source': 'session' if session_key else 'not_configured',
+                    'editable': True
+                }
+    
+    return render_template('api_keys.html', api_keys=api_key_sources, models=MODELS)
 
 @app.route('/test_api_key/<provider>', methods=['POST'])
 def test_api_key_route(provider):
@@ -418,7 +451,6 @@ def handle_oracle_message(agent, user_message, api_keys):
         
         # Format response with summary even when no tools are used
         interaction_summary = "## 🔍 Oracle Interaction Summary\n\n"
-        interaction_summary += "**Original Request:** " + user_message + "\n\n"
         interaction_summary += "**Tool/Agent Interactions:** None (direct response)\n\n"
         interaction_summary += "---\n\n"
         interaction_summary += "**Oracle Response:**\n\n" + response_text
@@ -484,7 +516,6 @@ def handle_oracle_tool_calls(response_text, tool_manager, agent_communicator, ap
             
             # Format interaction summary
             interaction_summary = "## 🔍 Oracle Interaction Summary\n\n"
-            interaction_summary += "**Original Request:** " + original_message + "\n\n"
             interaction_summary += "**Tool/Agent Interactions:**\n"
             for log_entry in interaction_log:
                 interaction_summary += f"- {log_entry}\n"

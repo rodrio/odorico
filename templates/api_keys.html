@@ -42,6 +42,9 @@
     .gemini-icon { background: linear-gradient(45deg, #4285F4, #34A853); }
     .openai-icon { background: linear-gradient(45deg, #000000, #4A4A4A); }
     .anthropic-icon { background: linear-gradient(45deg, #D97757, #92400E); }
+    .searchapi-icon { background: linear-gradient(45deg, #FF6B6B, #4ECDC4); }
+    .linkedin-icon { background: linear-gradient(45deg, #0077B5, #00A0DC); }
+    .meta-icon { background: linear-gradient(45deg, #1877F2, #42B4F6); }
     
     .provider-name h3 {
         margin: 0;
@@ -74,6 +77,13 @@
         cursor: not-allowed;
     }
     
+    .key-info {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    
     .api-key-input {
         display: flex;
         gap: 10px;
@@ -93,6 +103,7 @@
         border: 1px solid #ddd;
         margin-bottom: 15px;
         word-break: break-all;
+        flex: 1;
     }
     
     .models-list {
@@ -129,6 +140,7 @@
     .status-success { background: #28a745; }
     .status-error { background: #dc3545; }
     .status-warning { background: #ffc107; }
+    .status-info { background: #17a2b8; }
     
     .test-result {
         margin-top: 10px;
@@ -163,13 +175,44 @@
         font-size: 0.9rem;
         color: #666;
     }
+    
+    .source-badge {
+        background: #e9ecef;
+        color: #495057;
+        padding: 2px 6px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    
+    .source-env { background: #d4edda; color: #155724; }
+    .source-session { background: #cce5ff; color: #004085; }
+    .source-not-configured { background: #f8d7da; color: #721c24; }
+    
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .provider-header {
+            flex-direction: column;
+            gap: 15px;
+            text-align: center;
+        }
+        
+        .key-info {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        
+        .api-key-input {
+            flex-direction: column;
+        }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="card">
     <h2>API Key Management</h2>
-    <p>Configure and test API keys for different AI providers. Keys are stored only in your current session and will be cleared when you close the browser.</p>
+    <p>Configure API keys for different AI providers. Keys from environment variables are automatically detected and take priority over session keys.</p>
 </div>
 
 <form method="post">
@@ -183,25 +226,44 @@
                     <p>Google's generative AI models</p>
                 </div>
             </div>
-            <button type="button" class="test-btn" onclick="testApiKey('gemini')" id="test-gemini">
+            <button type="button" class="test-btn" onclick="testApiKey('gemini')" id="test-gemini" 
+                    {% if not api_keys.gemini.editable %}disabled{% endif %}>
                 Test Key
             </button>
         </div>
         
         <div class="key-status">
-            <span class="status-indicator status-{{ 'success' if api_keys.gemini else 'warning' }}"></span>
+            <span class="status-indicator status-{{ 
+                'success' if api_keys.gemini.key and api_keys.gemini.source != 'not_configured' 
+                else 'warning' if api_keys.gemini.source == 'not_configured' 
+                else 'info' }}"></span>
             <span class="key-status-text">
-                {{ 'Configured' if api_keys.gemini else 'Not configured' }}
+                {% if api_keys.gemini.source == 'environment' %}
+                    Configured (Environment)
+                {% elif api_keys.gemini.source == 'session' %}
+                    Configured (Session)
+                {% else %}
+                    Not configured
+                {% endif %}
             </span>
+            {% if api_keys.gemini.source %}
+            <span class="source-badge source-{{ api_keys.gemini.source }}">
+                {{ api_keys.gemini.source.title() }}
+            </span>
+            {% endif %}
         </div>
         
         <div class="api-key-input">
+            {% if api_keys.gemini.editable %}
             <input type="password" name="gemini_key" id="gemini_key" 
                    placeholder="Enter Gemini API key..." 
-                   value="{{ api_keys.gemini }}">
+                   value="{{ api_keys.gemini.key }}">
             <button type="button" class="btn btn-secondary" onclick="togglePassword('gemini_key')">
                 Show
             </button>
+            {% else %}
+            <div class="api-key-display">{{ api_keys.gemini.key }}</div>
+            {% endif %}
         </div>
         
         <div class="models-list">
@@ -224,25 +286,44 @@
                     <p>GPT and other OpenAI models</p>
                 </div>
             </div>
-            <button type="button" class="test-btn" onclick="testApiKey('openai')" id="test-openai">
+            <button type="button" class="test-btn" onclick="testApiKey('openai')" id="test-openai"
+                    {% if not api_keys.openai.editable %}disabled{% endif %}>
                 Test Key
             </button>
         </div>
         
         <div class="key-status">
-            <span class="status-indicator status-{{ 'success' if api_keys.openai else 'warning' }}"></span>
+            <span class="status-indicator status-{{ 
+                'success' if api_keys.openai.key and api_keys.openai.source != 'not_configured' 
+                else 'warning' if api_keys.openai.source == 'not_configured' 
+                else 'info' }}"></span>
             <span class="key-status-text">
-                {{ 'Configured' if api_keys.openai else 'Not configured' }}
+                {% if api_keys.openai.source == 'environment' %}
+                    Configured (Environment)
+                {% elif api_keys.openai.source == 'session' %}
+                    Configured (Session)
+                {% else %}
+                    Not configured
+                {% endif %}
             </span>
+            {% if api_keys.openai.source %}
+            <span class="source-badge source-{{ api_keys.openai.source }}">
+                {{ api_keys.openai.source.title() }}
+            </span>
+            {% endif %}
         </div>
         
         <div class="api-key-input">
+            {% if api_keys.openai.editable %}
             <input type="password" name="openai_key" id="openai_key" 
                    placeholder="Enter OpenAI API key..." 
-                   value="{{ api_keys.openai }}">
+                   value="{{ api_keys.openai.key }}">
             <button type="button" class="btn btn-secondary" onclick="togglePassword('openai_key')">
                 Show
             </button>
+            {% else %}
+            <div class="api-key-display">{{ api_keys.openai.key }}</div>
+            {% endif %}
         </div>
         
         <div class="models-list">
@@ -265,25 +346,44 @@
                     <p>Claude AI models</p>
                 </div>
             </div>
-            <button type="button" class="test-btn" onclick="testApiKey('anthropic')" id="test-anthropic">
+            <button type="button" class="test-btn" onclick="testApiKey('anthropic')" id="test-anthropic"
+                    {% if not api_keys.anthropic.editable %}disabled{% endif %}>
                 Test Key
             </button>
         </div>
         
         <div class="key-status">
-            <span class="status-indicator status-{{ 'success' if api_keys.anthropic else 'warning' }}"></span>
+            <span class="status-indicator status-{{ 
+                'success' if api_keys.anthropic.key and api_keys.anthropic.source != 'not_configured' 
+                else 'warning' if api_keys.anthropic.source == 'not_configured' 
+                else 'info' }}"></span>
             <span class="key-status-text">
-                {{ 'Configured' if api_keys.anthropic else 'Not configured' }}
+                {% if api_keys.anthropic.source == 'environment' %}
+                    Configured (Environment)
+                {% elif api_keys.anthropic.source == 'session' %}
+                    Configured (Session)
+                {% else %}
+                    Not configured
+                {% endif %}
             </span>
+            {% if api_keys.anthropic.source %}
+            <span class="source-badge source-{{ api_keys.anthropic.source }}">
+                {{ api_keys.anthropic.source.title() }}
+            </span>
+            {% endif %}
         </div>
         
         <div class="api-key-input">
+            {% if api_keys.anthropic.editable %}
             <input type="password" name="anthropic_key" id="anthropic_key" 
                    placeholder="Enter Anthropic API key..." 
-                   value="{{ api_keys.anthropic }}">
+                   value="{{ api_keys.anthropic.key }}">
             <button type="button" class="btn btn-secondary" onclick="togglePassword('anthropic_key')">
                 Show
             </button>
+            {% else %}
+            <div class="api-key-display">{{ api_keys.anthropic.key }}</div>
+            {% endif %}
         </div>
         
         <div class="models-list">
@@ -296,10 +396,117 @@
         <div class="test-result" id="test-result-anthropic"></div>
     </div>
 
+    <!-- External Tools Section -->
+    <div class="card">
+        <h3>🔧 External Tools (Oracle Agent)</h3>
+        <p>These tools are used by the Oracle agent and can only be configured via environment variables.</p>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 20px;">
+            <!-- SearchAPI.io -->
+            <div class="provider-section">
+                <div class="provider-header">
+                    <div class="provider-title">
+                        <div class="provider-icon searchapi-icon">S</div>
+                        <div class="provider-name">
+                            <h4>SearchAPI.io</h4>
+                            <p>Web search functionality</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="key-status">
+                    <span class="status-indicator status-{{ 
+                        'success' if api_keys.searchapi.key 
+                        else 'warning' }}"></span>
+                    <span class="key-status-text">
+                        {% if api_keys.searchapi.key %}
+                            Configured (Environment)
+                        {% else %}
+                            Not configured
+                        {% endif %}
+                    </span>
+                    {% if api_keys.searchapi.key %}
+                    <span class="source-badge source-env">Environment</span>
+                    {% endif %}
+                </div>
+                
+                <div class="api-key-display">
+                    {{ api_keys.searchapi.key if api_keys.searchapi.key else 'Not set' }}
+                </div>
+            </div>
+            
+            <!-- LinkedIn -->
+            <div class="provider-section">
+                <div class="provider-header">
+                    <div class="provider-title">
+                        <div class="provider-icon linkedin-icon">L</div>
+                        <div class="provider-name">
+                            <h4>LinkedIn API</h4>
+                            <p>Post to LinkedIn</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="key-status">
+                    <span class="status-indicator status-{{ 
+                        'success' if api_keys.linkedin.key 
+                        else 'warning' }}"></span>
+                    <span class="key-status-text">
+                        {% if api_keys.linkedin.key %}
+                            Configured (Environment)
+                        {% else %}
+                            Not configured
+                        {% endif %}
+                    </span>
+                    {% if api_keys.linkedin.key %}
+                    <span class="source-badge source-env">Environment</span>
+                    {% endif %}
+                </div>
+                
+                <div class="api-key-display">
+                    {{ api_keys.linkedin.key if api_keys.linkedin.key else 'Not set' }}
+                </div>
+            </div>
+            
+            <!-- Meta API -->
+            <div class="provider-section">
+                <div class="provider-header">
+                    <div class="provider-title">
+                        <div class="provider-icon meta-icon">M</div>
+                        <div class="provider-name">
+                            <h4>Meta API</h4>
+                            <p>WhatsApp, Instagram, Facebook</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="key-status">
+                    <span class="status-indicator status-{{ 
+                        'success' if api_keys.meta.key 
+                        else 'warning' }}"></span>
+                    <span class="key-status-text">
+                        {% if api_keys.meta.key %}
+                            Configured (Environment)
+                        {% else %}
+                            Not configured
+                        {% endif %}
+                    </span>
+                    {% if api_keys.meta.key %}
+                    <span class="source-badge source-env">Environment</span>
+                    {% endif %}
+                </div>
+                
+                <div class="api-key-display">
+                    {{ api_keys.meta.key if api_keys.meta.key else 'Not set' }}
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="card">
         <div class="form-group">
-            <button type="submit" class="btn">Save All API Keys</button>
-            <button type="button" class="btn btn-danger" onclick="clearAllKeys()">Clear All Keys</button>
+            <button type="submit" class="btn">Save Session API Keys</button>
+            <button type="button" class="btn btn-danger" onclick="clearAllKeys()">Clear Session Keys</button>
             <a href="{{ url_for('index') }}" class="btn btn-secondary">Back to Agents</a>
         </div>
     </div>
@@ -310,19 +517,37 @@
 </form>
 
 <div class="card">
-    <h3>Getting API Keys</h3>
+    <h3>📋 Getting API Keys</h3>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 15px;">
         <div>
             <h4>Google Gemini</h4>
             <p>Visit <a href="https://makersuite.google.com/app/apikey" target="_blank">Google AI Studio</a> to create your API key.</p>
+            <p><strong>Environment Variable:</strong> <code>GOOGLE_API_KEY</code></p>
         </div>
         <div>
             <h4>OpenAI</h4>
             <p>Visit <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a> to create your API key.</p>
+            <p><strong>Environment Variable:</strong> <code>OPENAI_API_KEY</code></p>
         </div>
         <div>
             <h4>Anthropic</h4>
             <p>Visit <a href="https://console.anthropic.com/" target="_blank">Anthropic Console</a> to create your API key.</p>
+            <p><strong>Environment Variable:</strong> <code>ANTHROPIC_API_KEY</code></p>
+        </div>
+        <div>
+            <h4>SearchAPI.io</h4>
+            <p>Visit <a href="https://www.searchapi.io/" target="_blank">SearchAPI.io</a> to create your API key.</p>
+            <p><strong>Environment Variable:</strong> <code>SEARCHAPI_API_KEY</code></p>
+        </div>
+        <div>
+            <h4>LinkedIn API</h4>
+            <p>Visit <a href="https://developer.linkedin.com/" target="_blank">LinkedIn Developer Portal</a> to create your API key.</p>
+            <p><strong>Environment Variable:</strong> <code>LINKEDIN_API_KEY</code></p>
+        </div>
+        <div>
+            <h4>Meta API</h4>
+            <p>Visit <a href="https://developers.facebook.com/" target="_blank">Meta for Developers</a> to create your API key.</p>
+            <p><strong>Environment Variable:</strong> <code>META_API_KEY</code></p>
         </div>
     </div>
 </div>
@@ -373,27 +598,29 @@ function testApiKey(provider) {
 }
 
 function clearAllKeys() {
-    if (confirm('Are you sure you want to clear all API keys from this session? This action cannot be undone.')) {
+    if (confirm('Are you sure you want to clear all session API keys? This action cannot be undone.')) {
         document.getElementById('clearForm').submit();
     }
 }
 
-// Auto-save functionality (optional)
+// Auto-update status indicators on input change
 document.querySelectorAll('input[name$="_key"]').forEach(input => {
-    input.addEventListener('input', function() {
-        // Update status indicator
-        const provider = this.name.replace('_key', '');
-        const statusIndicator = this.closest('.provider-section').querySelector('.status-indicator');
-        const statusText = this.closest('.provider-section').querySelector('.key-status-text');
-        
-        if (this.value.trim()) {
-            statusIndicator.className = 'status-indicator status-success';
-            statusText.textContent = 'Configured';
-        } else {
-            statusIndicator.className = 'status-indicator status-warning';
-            statusText.textContent = 'Not configured';
-        }
-    });
+    if (input.type === 'password') {
+        input.addEventListener('input', function() {
+            // Update status indicator for session keys only
+            const provider = this.name.replace('_key', '');
+            const statusIndicator = this.closest('.provider-section').querySelector('.status-indicator');
+            const statusText = this.closest('.provider-section').querySelector('.key-status-text');
+            
+            if (this.value.trim()) {
+                statusIndicator.className = 'status-indicator status-success';
+                statusText.textContent = 'Configured (Session)';
+            } else {
+                statusIndicator.className = 'status-indicator status-warning';
+                statusText.textContent = 'Not configured';
+            }
+        });
+    }
 });
 </script>
 {% endblock %}
