@@ -9,14 +9,46 @@
 </div>
 
 {% if agents %}
+<!-- Oracle Agent Section -->
+{% for agent_id, agent in agents.items() %}
+{% if agent.get('is_oracle') %}
+<div class="expandable expanded" style="border: 2px solid #ffd700; background: linear-gradient(135deg, #fff9e6 0%, #fff3cd 100%);">
+    <div class="expandable-header">
+        <h3>⚡ Oracle Agent - System Thinker</h3>
+        <span class="expandable-arrow">▼</span>
+    </div>
+    <div class="expandable-content">
+        <div class="agent-item" style="border-left: 4px solid #ffd700; padding-left: 15px;">
+            <div class="agent-info">
+                <h4>🔮 {{ agent.name }}</h4>
+                <p><strong>Provider:</strong> {{ agent.get('provider', 'gemini').title() }}</p>
+                <p><strong>Model:</strong> {{ agent.model }}</p>
+                <p><strong>Type:</strong> System Agent with External Tools Access</p>
+                <p><strong>Capabilities:</strong> Can communicate with other agents and use external APIs (SearchAPI.io, LinkedIn, WhatsApp, Instagram, Facebook)</p>
+                {% if agent.prompt %}
+                <p><strong>Prompt:</strong> {{ agent.prompt[:150] }}{% if agent.prompt|length > 150 %}...{% endif %}</p>
+                {% endif %}
+            </div>
+            <div class="agent-actions">
+                <a href="{{ url_for('chat_page', agent_id=agent_id) }}" class="btn" style="background: #ffd700; color: #000;">Chat with Oracle</a>
+                <a href="{{ url_for('configure_agent') }}?agent_id={{ agent_id }}" class="btn btn-secondary">Configure</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endfor %}
+
+<!-- Regular Agents Section -->
 <div class="expandable expanded">
     <div class="expandable-header">
-        <h3>Available Agents ({{ agents|length }})</h3>
+        <h3>Available Agents ({{ agents|length - 1 }})</h3>
         <span class="expandable-arrow">▼</span>
     </div>
     <div class="expandable-content">
         <ul class="agent-list">
             {% for agent_id, agent in agents.items() %}
+            {% if not agent.get('is_oracle') %}
             <li class="agent-item">
                 <div class="agent-info">
                     <h4>{{ agent.name }}</h4>
@@ -33,6 +65,7 @@
                        onclick="return confirm('Are you sure you want to delete this agent?')">Delete</a>
                 </div>
             </li>
+            {% endif %}
             {% endfor %}
         </ul>
     </div>
@@ -50,5 +83,17 @@
     <p>
         <a href="{{ url_for('configure_agent') }}" class="btn">Create New Agent</a>
     </p>
+</div>
+
+<div class="card" style="background: #f8f9fa; border: 1px solid #dee2e6;">
+    <h3>🔮 About the Oracle Agent</h3>
+    <p>The Oracle is a special system agent that serves as the central thinker and coordinator of the Odorico system.</p>
+    <ul>
+        <li>Has access to all other agents and can communicate with them</li>
+        <li>Can use external tools (SearchAPI.io, LinkedIn, WhatsApp, Instagram, Facebook)</li>
+        <li>Analyzes complex requests and coordinates with specialized agents</li>
+        <li>Makes rational decisions about optimal resource usage</li>
+        <li>Only the model can be configured - name and prompt are system-defined</li>
+    </ul>
 </div>
 {% endblock %}

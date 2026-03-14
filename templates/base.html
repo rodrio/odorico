@@ -39,20 +39,29 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
         }
         
         h1 {
             font-size: 2rem;
             font-weight: 300;
+            margin: 0;
+        }
+        
+        nav {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
         }
         
         nav a {
             color: white;
             text-decoration: none;
-            margin-left: 20px;
             padding: 8px 16px;
             border-radius: 20px;
             transition: background-color 0.3s;
+            white-space: nowrap;
         }
         
         nav a:hover {
@@ -69,6 +78,8 @@
             border: none;
             cursor: pointer;
             transition: background-color 0.3s;
+            font-size: 14px;
+            text-align: center;
         }
         
         .btn:hover {
@@ -192,6 +203,8 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
         }
         
         .agent-item:last-child {
@@ -200,6 +213,11 @@
         
         .agent-item:hover {
             background: #f8f9fa;
+        }
+        
+        .agent-info {
+            flex: 1;
+            min-width: 200px;
         }
         
         .agent-info h4 {
@@ -216,6 +234,7 @@
         .agent-actions {
             display: flex;
             gap: 10px;
+            flex-wrap: wrap;
         }
         
         .chat-container {
@@ -265,15 +284,129 @@
         .chat-input-container {
             display: flex;
             gap: 10px;
+            flex-wrap: wrap;
         }
         
         .chat-input {
             flex: 1;
+            min-width: 200px;
         }
         
         .chat-input textarea {
             min-height: 60px;
             resize: none;
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .header-content {
+                padding: 0 15px;
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            h1 {
+                font-size: 1.5rem;
+                margin-bottom: 10px;
+            }
+            
+            nav {
+                justify-content: center;
+            }
+            
+            nav a {
+                font-size: 14px;
+                padding: 6px 12px;
+            }
+            
+            .agent-item {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
+            }
+            
+            .agent-info {
+                min-width: auto;
+            }
+            
+            .agent-actions {
+                justify-content: center;
+            }
+            
+            .btn {
+                padding: 8px 16px;
+                font-size: 13px;
+            }
+            
+            .chat-container {
+                height: 60vh;
+            }
+            
+            .chat-messages {
+                padding: 15px;
+            }
+            
+            .message {
+                max-width: 90%;
+                padding: 12px;
+            }
+            
+            .chat-input-container {
+                flex-direction: column;
+            }
+            
+            .chat-input {
+                min-width: auto;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .container {
+                padding: 5px;
+            }
+            
+            h1 {
+                font-size: 1.3rem;
+            }
+            
+            nav a {
+                font-size: 12px;
+                padding: 5px 10px;
+            }
+            
+            .card {
+                padding: 15px;
+                margin-bottom: 15px;
+            }
+            
+            .btn {
+                padding: 6px 12px;
+                font-size: 12px;
+                width: 100%;
+                margin-bottom: 5px;
+            }
+            
+            .agent-item {
+                padding: 10px;
+            }
+            
+            .chat-messages {
+                padding: 10px;
+            }
+            
+            .message {
+                max-width: 95%;
+                padding: 10px;
+                margin-bottom: 15px;
+            }
+            
+            .chat-container {
+                height: 50vh;
+            }
         }
     </style>
     {% block extra_css %}{% endblock %}

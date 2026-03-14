@@ -7,6 +7,7 @@ import google.genai as genai
 from werkzeug.utils import secure_filename
 from openai import OpenAI
 import anthropic
+from external_tools import ExternalToolManager, AgentCommunicator
 
 app = Flask(__name__)
 
@@ -177,40 +178,71 @@ def configure_agent():
     """Configure a new or existing agent"""
     if request.method == 'POST':
         agent_id = request.form.get('agent_id') or str(uuid.uuid4())
-        name = request.form.get('name', '').strip()
-        provider = request.form.get('provider')
-        model = request.form.get('model')
-        prompt_text = request.form.get('prompt_text', '').strip()
         
-        # Handle file upload
-        file_prompt = ''
-        if 'prompt_file' in request.files:
-            file = request.files['prompt_file']
-            if file and file.filename and allowed_file(file.filename):
-                filename = secure_filename(file.filename)
-                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(filepath)
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    file_prompt = f.read()
-                os.remove(filepath)  # Clean up uploaded file
+        # Check if this is the Oracle agent
+        is_oracle = agent_id == 'oracle-agent'
         
-        # Merge prompts (file content first, then text content)
-        combined_prompt = file_prompt
-        if prompt_text:
-            if combined_prompt:
-                combined_prompt += '\n\n' + prompt_text
-            else:
-                combined_prompt = prompt_text
+        if is_oracle:
+            # Oracle agent: only allow model changes
+            name = "Oracle"  # Fixed name
+            provider = "gemini"  # Fixed provider
+            model = request.form.get('model', 'gemini-3.1-flash-lite-preview')
+            # Oracle prompt is fixed, don't change it
+            agents = load_agents()
+            oracle_prompt = agents.get('oracle-agent', {}).get('prompt', '')
+            combined_prompt = oracle_prompt
+        else:
+            # Regular agent: allow all changes
+            name = request.form.get('name', '').strip()
+            provider = request.form.get('provider')
+            model = request.form.get('model')
+            prompt_text = request.form.get('prompt_text', '').strip()
+            
+            # Handle file upload
+            file_prompt = ''
+            if 'prompt_file' in request.files:
+                file = request.files['prompt_file']
+                if file and file.filename and allowed_file(file.filename):
+                    filename = secure_filename(file.filename)
+                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(filepath)
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        file_prompt = f.read()
+                    os.remove(filepath)  # Clean up uploaded file
+            
+            # Merge prompts (file content first, then text content)
+            combined_prompt = file_prompt
+            if prompt_text:
+                if combined_prompt:
+                    combined_prompt += '\n\n' + prompt_text
+                else:
+                    combined_prompt = prompt_text
         
         agents = load_agents()
-        agents[agent_id] = {
-            'name': name,
-            'provider': provider,
-            'model': model,
-            'prompt': combined_prompt,
-            'created_at': datetime.now().isoformat(),
-            'updated_at': datetime.now().isoformat()
-        }
+        
+        # Preserve Oracle-specific properties
+        if is_oracle and 'oracle-agent' in agents:
+            existing_oracle = agents['oracle-agent']
+            agents[agent_id] = {
+                'name': name,
+                'provider': provider,
+                'model': model,
+                'prompt': combined_prompt,
+                'created_at': existing_oracle.get('created_at', datetime.now().isoformat()),
+                'updated_at': datetime.now().isoformat(),
+                'is_oracle': True
+            }
+        else:
+            agents[agent_id] = {
+                'name': name,
+                'provider': provider,
+                'model': model,
+                'prompt': combined_prompt,
+                'created_at': datetime.now().isoformat(),
+                'updated_at': datetime.now().isoformat()
+            }
+            if is_oracle:
+                agents[agent_id]['is_oracle'] = True
         
         save_agents(agents)
         flash(f'Agent "{name}" has been saved successfully!')
@@ -268,6 +300,11 @@ def send_message(agent_id):
         return jsonify({'error': f'{provider.title()} API key not configured'}), 500
     
     try:
+        # Check if this is the Oracle agent
+        if agent.get('is_oracle'):
+            return handle_oracle_message(agent, user_message, api_keys)
+        
+        # Regular agent processing
         if provider == 'gemini':
             # Configure Gemini
             gemini_client = genai.Client(api_key=api_key)
@@ -332,6 +369,185 @@ def send_message(agent_id):
             
     except Exception as e:
         return jsonify({'error': f'Failed to get response: {str(e)}'}), 500
+
+def handle_oracle_message(agent, user_message, api_keys):
+    """Handle Oracle agent messages with access to external tools and other agents"""
+    try:
+        # Initialize external tools and agent communicator
+        tool_manager = ExternalToolManager()
+        agent_communicator = AgentCommunicator()
+        
+        # Get available tools and agents
+        available_tools = tool_manager.get_available_tools()
+        all_agents = agent_communicator.get_all_agents()
+        
+        # Remove Oracle from the list of agents to avoid self-communication
+        other_agents = {k: v for k, v in all_agents.items() if not v.get('is_oracle')}
+        
+        # Build context for Oracle
+        context_info = {
+            'available_tools': available_tools,
+            'other_agents': {agent_id: {'name': agent_info['name'], 'model': agent_info['model']} 
+                           for agent_id, agent_info in other_agents.items()},
+            'user_message': user_message
+        }
+        
+        # Configure Gemini for Oracle
+        gemini_client = genai.Client(api_key=api_keys['gemini'])
+        chat = gemini_client.chats.create(model=agent['model'])
+        
+        # Send Oracle prompt with context
+        enhanced_prompt = f"{agent['prompt']}\n\nCurrent Context:\n"
+        enhanced_prompt += f"Available Tools: {json.dumps(available_tools, indent=2)}\n"
+        enhanced_prompt += f"Other Agents: {json.dumps(context_info['other_agents'], indent=2)}\n"
+        enhanced_prompt += f"User Request: {user_message}\n\n"
+        enhanced_prompt += "You can use tools by responding with TOOL_CALL format: "
+        enhanced_prompt += "TOOL_CALL: tool_name|param1=value1|param2=value2\n"
+        enhanced_prompt += "Available tools: searchapi_search, linkedin_post, whatsapp_send_message, instagram_post, facebook_post, communicate_agent\n"
+        enhanced_prompt += "For communicate_agent, use: communicate_agent|agent_id=AGENT_ID|message=YOUR_MESSAGE\n"
+        
+        chat.send_message(enhanced_prompt)
+        
+        # Get Oracle's response
+        response = chat.send_message(f"Please help with: {user_message}")
+        response_text = response.text
+        
+        # Check if Oracle wants to use tools
+        if 'TOOL_CALL:' in response_text:
+            return handle_oracle_tool_calls(response_text, tool_manager, agent_communicator, api_keys, chat, user_message)
+        
+        # Format response with summary even when no tools are used
+        interaction_summary = "## 🔍 Oracle Interaction Summary\n\n"
+        interaction_summary += "**Original Request:** " + user_message + "\n\n"
+        interaction_summary += "**Tool/Agent Interactions:** None (direct response)\n\n"
+        interaction_summary += "---\n\n"
+        interaction_summary += "**Oracle Response:**\n\n" + response_text
+        
+        return jsonify({
+            'response': interaction_summary,
+            'timestamp': datetime.now().isoformat(),
+            'agent_type': 'oracle',
+            'tools_used': [],
+            'interaction_log': ['Direct response - no external tools used']
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Oracle processing failed: {str(e)}'}), 500
+
+def handle_oracle_tool_calls(response_text, tool_manager, agent_communicator, api_keys, chat, original_message):
+    """Handle tool calls from Oracle agent"""
+    try:
+        # Parse tool calls from response
+        tool_results = []
+        interaction_log = []
+        remaining_text = response_text
+        
+        while 'TOOL_CALL:' in remaining_text:
+            start_idx = remaining_text.find('TOOL_CALL:')
+            end_idx = remaining_text.find('\n', start_idx)
+            if end_idx == -1:
+                end_idx = len(remaining_text)
+            
+            tool_call = remaining_text[start_idx:end_idx].replace('TOOL_CALL:', '').strip()
+            remaining_text = remaining_text[end_idx+1:] if end_idx < len(remaining_text) else ''
+            
+            # Parse tool call
+            parts = tool_call.split('|')
+            tool_name = parts[0].strip()
+            params = {}
+            
+            for part in parts[1:]:
+                if '=' in part:
+                    key, value = part.split('=', 1)
+                    params[key.strip()] = value.strip()
+            
+            # Log the interaction attempt
+            interaction_topic = params.get('query', params.get('message', params.get('content', 'Unknown topic')))
+            interaction_log.append(f"🔧 Tool: {tool_name} | Topic: {interaction_topic} | Status: Executing...")
+            
+            # Execute tool call
+            result = execute_tool_call(tool_name, params, tool_manager, agent_communicator, api_keys)
+            tool_results.append(f"Tool: {tool_name}, Result: {json.dumps(result, indent=2)}")
+            
+            # Update interaction log with result status
+            if result.get('success'):
+                interaction_log[-1] = f"✅ Tool: {tool_name} | Topic: {interaction_topic} | Status: Success"
+            elif 'error' in result:
+                interaction_log[-1] = f"❌ Tool: {tool_name} | Topic: {interaction_topic} | Status: Failed - {result['error']}"
+            else:
+                interaction_log[-1] = f"⚠️ Tool: {tool_name} | Topic: {interaction_topic} | Status: Partial - {str(result)[:100]}..."
+        
+        # Send tool results back to Oracle for final response
+        if tool_results:
+            tool_summary = "\n\nTool Results:\n" + "\n".join(tool_results)
+            final_response = chat.send_message(f"Based on these tool results, please provide a comprehensive response to the user's original request: {original_message}{tool_summary}")
+            
+            # Format interaction summary
+            interaction_summary = "## 🔍 Oracle Interaction Summary\n\n"
+            interaction_summary += "**Original Request:** " + original_message + "\n\n"
+            interaction_summary += "**Tool/Agent Interactions:**\n"
+            for log_entry in interaction_log:
+                interaction_summary += f"- {log_entry}\n"
+            interaction_summary += f"\n**Total Interactions:** {len(interaction_log)}\n\n"
+            interaction_summary += "---\n\n"
+            interaction_summary += "**Oracle Response:**\n\n" + final_response.text
+            
+            return jsonify({
+                'response': interaction_summary,
+                'timestamp': datetime.now().isoformat(),
+                'agent_type': 'oracle',
+                'tools_used': [result.split(':')[1].split(',')[0] for result in tool_results],
+                'interaction_log': interaction_log
+            })
+        
+        # Fallback to original response if no tools were executed
+        return jsonify({
+            'response': response_text,
+            'timestamp': datetime.now().isoformat(),
+            'agent_type': 'oracle'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Tool execution failed: {str(e)}'}), 500
+
+def execute_tool_call(tool_name, params, tool_manager, agent_communicator, api_keys):
+    """Execute a specific tool call"""
+    try:
+        if tool_name == 'google_search':
+            query = params.get('query', '')
+            num_results = int(params.get('num_results', 10))
+            return tool_manager.google_search(query, num_results)
+        
+        elif tool_name == 'linkedin_post':
+            content = params.get('content', '')
+            visibility = params.get('visibility', 'PUBLIC')
+            return tool_manager.linkedin_post(content, visibility)
+        
+        elif tool_name == 'whatsapp_send_message':
+            phone_number = params.get('phone_number', '')
+            message = params.get('message', '')
+            return tool_manager.whatsapp_send_message(phone_number, message)
+        
+        elif tool_name == 'instagram_post':
+            image_url = params.get('image_url', '')
+            caption = params.get('caption', '')
+            return tool_manager.instagram_post(image_url, caption)
+        
+        elif tool_name == 'facebook_post':
+            message = params.get('message', '')
+            link = params.get('link', None)
+            return tool_manager.facebook_post(message, link)
+        
+        elif tool_name == 'communicate_agent':
+            agent_id = params.get('agent_id', '')
+            message = params.get('message', '')
+            return agent_communicator.communicate_with_agent(agent_id, message, api_keys)
+        
+        else:
+            return {'error': f'Unknown tool: {tool_name}'}
+            
+    except Exception as e:
+        return {'error': f'Tool execution failed: {str(e)}'}
 
 @app.route('/export/<agent_id>')
 def export_conversation(agent_id):

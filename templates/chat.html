@@ -180,6 +180,98 @@
         margin-bottom: 10px;
         color: #333;
     }
+    
+    /* Responsive Design for Chat */
+    @media (max-width: 768px) {
+        .chat-header {
+            flex-direction: column;
+            gap: 15px;
+            text-align: center;
+        }
+        
+        .agent-details {
+            text-align: center;
+        }
+        
+        .chat-actions {
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .chat-container {
+            height: 60vh;
+        }
+        
+        .chat-messages {
+            padding: 15px;
+        }
+        
+        .message {
+            max-width: 90%;
+            padding: 12px;
+        }
+        
+        .chat-input-container {
+            padding: 15px;
+        }
+        
+        .chat-input {
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .send-btn {
+            padding: 12px 20px;
+            font-size: 14px;
+        }
+    }
+    
+    @media (max-width: 480px) {
+        .chat-header {
+            padding: 15px;
+        }
+        
+        .chat-container {
+            height: 50vh;
+        }
+        
+        .chat-messages {
+            padding: 10px;
+        }
+        
+        .message {
+            max-width: 95%;
+            padding: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .message-content {
+            font-size: 14px;
+        }
+        
+        .message-time {
+            font-size: 0.75rem;
+        }
+        
+        .chat-input-container {
+            padding: 10px;
+        }
+        
+        .chat-input textarea {
+            min-height: 50px;
+            font-size: 14px;
+        }
+        
+        .send-btn {
+            padding: 10px 15px;
+            font-size: 13px;
+        }
+        
+        .typing-indicator {
+            padding: 10px;
+            margin-bottom: 15px;
+        }
+    }
 </style>
 {% endblock %}
 

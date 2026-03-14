@@ -6,6 +6,13 @@
 <div class="card">
     <h2>{% if agent %}Edit Agent: {{ agent.name }}{% else %}Create New Agent{% endif %}</h2>
     
+    {% if agent and agent.get('is_oracle') %}
+    <div class="card" style="background-color: #fff3cd; border-color: #ffeaa7; margin-bottom: 20px;">
+        <h3>⚡ Oracle Agent - Special Configuration</h3>
+        <p>The Oracle is a special system agent with access to external tools and other agents. Only the model can be changed.</p>
+    </div>
+    {% endif %}
+    
     <form method="post" enctype="multipart/form-data">
         {% if agent_id %}
         <input type="hidden" name="agent_id" value="{{ agent_id }}">
@@ -15,13 +22,18 @@
             <label for="name">Agent Name *</label>
             <input type="text" id="name" name="name" required 
                    value="{% if agent %}{{ agent.name }}{% endif %}"
-                   placeholder="e.g., doctor, teacher, programmer">
+                   placeholder="e.g., doctor, teacher, programmer"
+                   {% if agent and agent.get('is_oracle') %}disabled{% endif %}>
             <small>The name should describe the agent's role or expertise.</small>
+            {% if agent and agent.get('is_oracle') %}
+            <small style="color: #6c757d; display: block; margin-top: 5px;">⚡ Oracle name cannot be changed.</small>
+            {% endif %}
         </div>
         
         <div class="form-group">
             <label for="provider">Provider *</label>
-            <select id="provider" name="provider" required onchange="updateModels()">
+            <select id="provider" name="provider" required onchange="updateModels()"
+                    {% if agent and agent.get('is_oracle') %}disabled{% endif %}>
                 <option value="">Select a provider...</option>
                 {% for provider in models.keys() %}
                 <option value="{{ provider }}" 
@@ -30,6 +42,9 @@
                 </option>
                 {% endfor %}
             </select>
+            {% if agent and agent.get('is_oracle') %}
+            <small style="color: #6c757d; display: block; margin-top: 5px;">⚡ Oracle provider is fixed to Gemini.</small>
+            {% endif %}
         </div>
         
         <div class="form-group">
@@ -45,8 +60,12 @@
                     {% endfor %}
                 {% endif %}
             </select>
+            {% if agent and agent.get('is_oracle') %}
+            <small style="color: #6c757d; display: block; margin-top: 5px;">⚡ You can change the Oracle's model to optimize performance.</small>
+            {% endif %}
         </div>
         
+        {% if not (agent and agent.get('is_oracle')) %}
         <div class="form-group">
             <label for="prompt_file">Upload Prompt File (Optional)</label>
             <input type="file" id="prompt_file" name="prompt_file" accept=".txt">
@@ -62,6 +81,13 @@
                 followed by the text content below.
             </small>
         </div>
+        {% else %}
+        <div class="form-group">
+            <label for="prompt_text">Oracle Prompt (System Defined)</label>
+            <textarea id="prompt_text" name="prompt_text" rows="10" disabled>{% if agent %}{{ agent.prompt }}{% endif %}</textarea>
+            <small style="color: #6c757d; display: block; margin-top: 5px;">⚡ Oracle prompt is system-defined and cannot be changed.</small>
+        </div>
+        {% endif %}
         
         <div class="form-group">
             <button type="submit" class="btn">
@@ -79,6 +105,9 @@
     <p><strong>Created:</strong> {{ agent.created_at }}</p>
     <p><strong>Last Updated:</strong> {{ agent.updated_at }}</p>
     <p><strong>Model:</strong> {{ agent.model }}</p>
+    {% if agent.get('is_oracle') %}
+    <p><strong>Type:</strong> ⚡ Oracle Agent (System Agent)</p>
+    {% endif %}
     {% if agent.prompt %}
     <details>
         <summary>Current Prompt</summary>
@@ -102,24 +131,26 @@
 
 {% block extra_js %}
 <script>
-const models = {{ models | tojson }};
+// Models data passed from Flask
+var modelsData = {{ models | tojson | safe }};
 
 function updateModels() {
-    const providerSelect = document.getElementById('provider');
-    const modelSelect = document.getElementById('model');
-    const selectedProvider = providerSelect.value;
+    var providerSelect = document.getElementById('provider');
+    var modelSelect = document.getElementById('model');
+    var selectedProvider = providerSelect.value;
     
     // Clear current options
     modelSelect.innerHTML = '<option value="">Select a model...</option>';
     
-    if (selectedProvider && models[selectedProvider]) {
+    if (selectedProvider && modelsData[selectedProvider]) {
         // Add models for selected provider
-        for (const [modelId, modelName] of Object.entries(models[selectedProvider])) {
-            const option = document.createElement('option');
+        Object.keys(modelsData[selectedProvider]).forEach(function(modelId) {
+            var modelName = modelsData[selectedProvider][modelId];
+            var option = document.createElement('option');
             option.value = modelId;
             option.textContent = modelName;
             modelSelect.appendChild(option);
-        }
+        });
     }
 }
 
