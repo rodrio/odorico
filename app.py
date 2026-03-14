@@ -451,7 +451,9 @@ def handle_oracle_message(agent, user_message, api_keys):
         
         # Format response with summary even when no tools are used
         interaction_summary = "## 🔍 Oracle Interaction Summary\n\n"
-        interaction_summary += "**Tool/Agent Interactions:** None (direct response)\n\n"
+        interaction_summary += "**Interaction with Tools/Agents:**\n"
+        interaction_summary += "- No tools or agents were used for this response.\n\n"
+        interaction_summary += "**Total Interactions:** 0\n\n"
         interaction_summary += "---\n\n"
         interaction_summary += "**Oracle Response:**\n\n" + response_text
         
@@ -501,7 +503,9 @@ def handle_oracle_tool_calls(response_text, tool_manager, agent_communicator, ap
         if not tool_calls:
             # No tool calls found, return original response
             interaction_summary = "## 🔍 Oracle Interaction Summary\n\n"
-            interaction_summary += "**Tool/Agent Interactions:** None (direct response)\n\n"
+            interaction_summary += "**Interaction with Tools/Agents:**\n"
+            interaction_summary += "- No tools or agents were used for this response.\n\n"
+            interaction_summary += "**Total Interactions:** 0\n\n"
             interaction_summary += "---\n\n"
             interaction_summary += "**Oracle Response:**\n\n" + response_text
             
@@ -522,9 +526,6 @@ def handle_oracle_tool_calls(response_text, tool_manager, agent_communicator, ap
             params = tool_call['params']
             interaction_topic = tool_call['topic']
             
-            # Log the interaction attempt
-            interaction_log.append(f"🔧 Tool: {tool_name} | Topic: {interaction_topic} | Status: Executing...")
-            
             # Execute tool call
             result = execute_tool_call(tool_name, params, tool_manager, agent_communicator, api_keys)
             tool_results.append({
@@ -533,13 +534,31 @@ def handle_oracle_tool_calls(response_text, tool_manager, agent_communicator, ap
                 'topic': interaction_topic
             })
             
-            # Update interaction log with result status
-            if result.get('success'):
-                interaction_log[-1] = f"✅ Tool: {tool_name} | Topic: {interaction_topic} | Status: Success"
-            elif 'error' in result:
-                interaction_log[-1] = f"❌ Tool: {tool_name} | Topic: {interaction_topic} | Status: Failed - {result['error']}"
+            # Format interaction log entry according to specified format
+            if tool_name == 'communicate_agent':
+                agent_id = params.get('agent_id', 'Unknown Agent')
+                # Get agent name from agents.json if possible
+                agents = load_agents()
+                agent_name = agents.get(agent_id, {}).get('name', agent_id)
+                
+                if result.get('success'):
+                    log_entry = f"✅ Tool used: communicate_agent | Agent: {agent_name} | Reason: The user requested to interact with this agent. | Topic: I requested {interaction_topic}. | Status: Success. The {agent_name}'s answer was relayed to the user."
+                elif 'error' in result:
+                    log_entry = f"❌ Tool used: communicate_agent | Agent: {agent_name} | Reason: The user requested to interact with this agent. | Topic: I requested {interaction_topic}. | Status: Failed. Error: {result['error']}"
+                else:
+                    log_entry = f"⚠️ Tool used: communicate_agent | Agent: {agent_name} | Reason: The user requested to interact with this agent. | Topic: I requested {interaction_topic}. | Status: Partial. Response: {str(result)[:100]}..."
             else:
-                interaction_log[-1] = f"⚠️ Tool: {tool_name} | Topic: {interaction_topic} | Status: Partial - {str(result)[:100]}..."
+                # Handle external tools
+                tool_display_name = tool_name.replace('_', ' ').title()
+                
+                if result.get('success'):
+                    log_entry = f"✅ Tool used: {tool_name} | Tool: {tool_display_name} | Reason: The user requested information from this tool. | Topic: I searched for {interaction_topic}. | Status: Success. The {tool_display_name} results were relayed to the user."
+                elif 'error' in result:
+                    log_entry = f"❌ Tool used: {tool_name} | Tool: {tool_display_name} | Reason: The user requested information from this tool. | Topic: I searched for {interaction_topic}. | Status: Failed. Error: {result['error']}"
+                else:
+                    log_entry = f"⚠️ Tool used: {tool_name} | Tool: {tool_display_name} | Reason: The user requested information from this tool. | Topic: I searched for {interaction_topic}. | Status: Partial. Response: {str(result)[:100]}..."
+            
+            interaction_log.append(log_entry)
         
         # Wait for all tool/agent responses to complete before providing final answer
         # Format comprehensive tool results for Oracle
@@ -555,10 +574,9 @@ def handle_oracle_tool_calls(response_text, tool_manager, agent_communicator, ap
         final_prompt = f"Based on ALL the tool/agent results above, provide a comprehensive final response to the user's original request: {original_message}\n\n{tool_summary}"
         final_response = chat.send_message(final_prompt)
         
-        # Format interaction summary
+        # Format interaction summary according to specified format
         interaction_summary = "## 🔍 Oracle Interaction Summary\n\n"
-        interaction_summary += "**Original Request:** " + original_message + "\n\n"
-        interaction_summary += "**Tool/Agent Interactions:**\n"
+        interaction_summary += "**Interaction with Tools/Agents:**\n"
         for log_entry in interaction_log:
             interaction_summary += f"- {log_entry}\n"
         interaction_summary += f"\n**Total Interactions:** {len(interaction_log)}\n\n"
