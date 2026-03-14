@@ -469,9 +469,8 @@ def handle_oracle_message(agent, user_message, api_keys):
 def handle_oracle_tool_calls(response_text, tool_manager, agent_communicator, api_keys, chat, original_message):
     """Handle tool calls from Oracle agent"""
     try:
-        # Parse tool calls from response
-        tool_results = []
-        interaction_log = []
+        # Parse all tool calls from response first
+        tool_calls = []
         remaining_text = response_text
         
         while 'TOOL_CALL:' in remaining_text:
@@ -493,13 +492,46 @@ def handle_oracle_tool_calls(response_text, tool_manager, agent_communicator, ap
                     key, value = part.split('=', 1)
                     params[key.strip()] = value.strip()
             
+            tool_calls.append({
+                'name': tool_name,
+                'params': params,
+                'topic': params.get('query', params.get('message', params.get('content', 'Unknown topic')))
+            })
+        
+        if not tool_calls:
+            # No tool calls found, return original response
+            interaction_summary = "## 🔍 Oracle Interaction Summary\n\n"
+            interaction_summary += "**Tool/Agent Interactions:** None (direct response)\n\n"
+            interaction_summary += "---\n\n"
+            interaction_summary += "**Oracle Response:**\n\n" + response_text
+            
+            return jsonify({
+                'response': interaction_summary,
+                'timestamp': datetime.now().isoformat(),
+                'agent_type': 'oracle',
+                'tools_used': [],
+                'interaction_log': ['Direct response - no external tools used']
+            })
+        
+        # Execute all tool calls and collect results
+        interaction_log = []
+        tool_results = []
+        
+        for tool_call in tool_calls:
+            tool_name = tool_call['name']
+            params = tool_call['params']
+            interaction_topic = tool_call['topic']
+            
             # Log the interaction attempt
-            interaction_topic = params.get('query', params.get('message', params.get('content', 'Unknown topic')))
             interaction_log.append(f"🔧 Tool: {tool_name} | Topic: {interaction_topic} | Status: Executing...")
             
             # Execute tool call
             result = execute_tool_call(tool_name, params, tool_manager, agent_communicator, api_keys)
-            tool_results.append(f"Tool: {tool_name}, Result: {json.dumps(result, indent=2)}")
+            tool_results.append({
+                'name': tool_name,
+                'result': result,
+                'topic': interaction_topic
+            })
             
             # Update interaction log with result status
             if result.get('success'):
@@ -509,37 +541,40 @@ def handle_oracle_tool_calls(response_text, tool_manager, agent_communicator, ap
             else:
                 interaction_log[-1] = f"⚠️ Tool: {tool_name} | Topic: {interaction_topic} | Status: Partial - {str(result)[:100]}..."
         
-        # Send tool results back to Oracle for final response
-        if tool_results:
-            tool_summary = "\n\nTool Results:\n" + "\n".join(tool_results)
-            final_response = chat.send_message(f"Based on these tool results, please provide a comprehensive response to the user's original request: {original_message}{tool_summary}")
-            
-            # Format interaction summary
-            interaction_summary = "## 🔍 Oracle Interaction Summary\n\n"
-            interaction_summary += "**Tool/Agent Interactions:**\n"
-            for log_entry in interaction_log:
-                interaction_summary += f"- {log_entry}\n"
-            interaction_summary += f"\n**Total Interactions:** {len(interaction_log)}\n\n"
-            interaction_summary += "---\n\n"
-            interaction_summary += "**Oracle Response:**\n\n" + final_response.text
-            
-            return jsonify({
-                'response': interaction_summary,
-                'timestamp': datetime.now().isoformat(),
-                'agent_type': 'oracle',
-                'tools_used': [result.split(':')[1].split(',')[0] for result in tool_results],
-                'interaction_log': interaction_log
-            })
+        # Wait for all tool/agent responses to complete before providing final answer
+        # Format comprehensive tool results for Oracle
+        tool_summary = "\n\n=== COMPLETE TOOL/AGENT RESULTS ===\n\n"
+        for i, tool_result in enumerate(tool_results, 1):
+            tool_summary += f"--- Tool/Agent {i}: {tool_result['name']} ---\n"
+            tool_summary += f"Topic: {tool_result['topic']}\n"
+            tool_summary += f"Result: {json.dumps(tool_result['result'], indent=2)}\n\n"
         
-        # Fallback to original response if no tools were executed
+        tool_summary += "=== END RESULTS ===\n\n"
+        
+        # Send complete results back to Oracle for final comprehensive response
+        final_prompt = f"Based on ALL the tool/agent results above, provide a comprehensive final response to the user's original request: {original_message}\n\n{tool_summary}"
+        final_response = chat.send_message(final_prompt)
+        
+        # Format interaction summary
+        interaction_summary = "## 🔍 Oracle Interaction Summary\n\n"
+        interaction_summary += "**Original Request:** " + original_message + "\n\n"
+        interaction_summary += "**Tool/Agent Interactions:**\n"
+        for log_entry in interaction_log:
+            interaction_summary += f"- {log_entry}\n"
+        interaction_summary += f"\n**Total Interactions:** {len(interaction_log)}\n\n"
+        interaction_summary += "---\n\n"
+        interaction_summary += "**Oracle Response:**\n\n" + final_response.text
+        
         return jsonify({
-            'response': response_text,
+            'response': interaction_summary,
             'timestamp': datetime.now().isoformat(),
-            'agent_type': 'oracle'
+            'agent_type': 'oracle',
+            'tools_used': [tool_result['name'] for tool_result in tool_results],
+            'interaction_log': interaction_log
         })
         
     except Exception as e:
-        return jsonify({'error': f'Tool execution failed: {str(e)}'}), 500
+        return jsonify({'error': f'Oracle tool execution failed: {str(e)}'}), 500
 
 def execute_tool_call(tool_name, params, tool_manager, agent_communicator, api_keys):
     """Execute a specific tool call"""
